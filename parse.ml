@@ -49,20 +49,51 @@ type http_request_line =
         http_version: string;
     }
 
+exception Invalid_http_request_method of string
 
 let get_http_method_from_string s =
     match s with
     | "GET" -> Some GET
     | "HEAD" -> Some HEAD
     | "POST" -> Some POST
-    | _ -> None
+    | _ -> raise (Invalid_http_request_method "Can't be recognized")
 
+let get_method_string_from_http_method m =
+    match m with
+    | GET -> "GET"
+    | HEAD -> "HEAD"
+    | POST -> "POST"
+
+let split_http_request_line s =
+    let splitted_request_line = String.split ~on:' ' s in
+    List.filter splitted_request_line ~f:(fun s -> s <> "")
+
+
+let get_http_request_line l =
+    let request_line_tokens = split_http_request_line (List.nth_exn l 0) in
+    let request_method = match get_http_method_from_string (List.nth_exn request_line_tokens 0) with
+        | Some m -> m
+        | None -> raise (Invalid_http_request_method "Can't be recognized")
+    in
+    let request_uri = List.nth_exn request_line_tokens 1 in
+    let request_version = List.nth_exn request_line_tokens 2 in
+    {
+        http_method      = request_method;
+        http_request_uri = request_uri;
+        http_version     = request_version;
+    }
+
+let () =
+    let request = get_http_request_line (split_on_string test_http_request "\r\n") in
+    printf "method = %s, uri = %s, version = %s\n" (get_method_string_from_http_method request.http_method) request.http_request_uri request.http_version
+
+(**
 let () =
     split_on_string test_http_request "\r\n"
     |> List.iter ~f:(fun s -> printf "Line: %s\n" s);
     split_on_string simple_http_request "\r\n"
     |> List.iter ~f:(fun s -> printf "Line: %s\n" s)
-
+*)
 (**
 let get_header_string s =
     (** let l = String.split_on_chars ~on:['\r';'\n'] s in *)
