@@ -11,11 +11,13 @@ let rec explode s =
 let implode l =
     String.concat l
 
+exception Out_of_bound_string_index of string
+
 let rec split_helper current_list current_str current_matched_str pattern_list index s_list =
     let current_patt_char =
         match List.nth pattern_list index with
         | Some c -> c
-        | None -> '0'
+        | None -> raise (Out_of_bound_string_index "'index' is outside of pattern_list")
     in
     let is_checking_last_patt_char =
         index = (List.length pattern_list) - 1
