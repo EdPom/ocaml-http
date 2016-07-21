@@ -13,6 +13,11 @@ let implode l =
 
 exception Out_of_bound_string_index of string
 
+(** NOTE: Maybe body should not be processed here. In case
+ *        body is actually binary and contains pattern_list
+ *  TODO: Check if BODY could be binary, or it always contain
+ *        texts.
+ *)
 let rec split_helper current_list current_str current_matched_str pattern_list index s_list =
     let current_patt_char =
         match List.nth pattern_list index with
@@ -70,6 +75,27 @@ let split_http_request_line s =
     let splitted_request_line = String.split ~on:' ' s in
     List.filter splitted_request_line ~f:(fun s -> s <> "")
 
+type http_request_header =
+    {
+        header: string;
+        value: string;
+    }
+
+exception Invalid_http_request_header of string
+
+let get_http_request_header header_line =
+    let splitted_header_line = String.split header_line ~on:':' in
+    let header_option = List.hd splitted_header_line in
+    let value_option = List.hd (List.rev splitted_header_line) in
+    match value_option, header_option with
+    | None, _ -> raise (Invalid_http_request_header "No header attached")
+    | _, None -> raise (Invalid_http_request_header "No value attached")
+    | Some h, Some v ->
+        {
+            header = String.strip h;
+            value  = String.strip v;
+        }
+
 
 let get_http_request_line l =
     let request_line_tokens = split_http_request_line (List.nth_exn l 0) in
@@ -84,6 +110,25 @@ let get_http_request_line l =
         http_request_uri = request_uri;
         http_version     = request_version;
     }
+
+let rec get_http_header_entries_util accumulated_strings remaining_strings =
+    match remaining_strings with
+    | ""::_ -> List.rev accumulated_strings
+    | s::remaining_strings' -> get_http_header_entries_util (s::accumulated_strings) remaining_strings'
+    | [] -> []
+
+let rec convert_header_strings_to_records init strings =
+    match strings with
+    | [] -> List.rev init
+    | s::strings' -> convert_header_strings_to_records ((get_http_request_header s)::init) strings'
+
+let get_http_header_entries request_stings =
+    let header_and_body_strings_option = List.tl request_stings in
+    match header_and_body_strings_option with
+    | Some header_and_body_strings ->
+        get_http_header_entries_util [] header_and_body_strings
+        |> convert_header_strings_to_records []
+    | None -> []
 
 let () =
     let request = get_http_request_line (split_on_string test_http_request "\r\n") in
