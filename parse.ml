@@ -9,19 +9,15 @@ let rec explode s =
     | s' -> (String.get s' 0) :: explode (String.sub s' ~pos:1 ~len:((String.length s') - 1))
 
 let implode l =
-    String.concat l
+    List.map ~f:Char.escaped l
+    |> String.concat
 
 exception Out_of_bound_string_index of string
 
-(** NOTE: Maybe body should not be processed here. In case
- *        body is actually binary and contains pattern_list
- *  TODO: Check if BODY could be binary, or it always contain
- *        texts.
- *)
 let rec split_helper current_list current_str current_matched_str pattern_list index s_list =
     let current_patt_char =
         match List.nth pattern_list index with
-        | Some c -> c
+        | Some ch -> ch
         | None -> raise (Out_of_bound_string_index "'index' is outside of pattern_list")
     in
     let is_checking_last_patt_char =
@@ -30,15 +26,19 @@ let rec split_helper current_list current_str current_matched_str pattern_list i
     match s_list with
     | [] -> List.rev ((current_str ^ current_matched_str) :: current_list)
     | c::s_list' ->
-        if c = current_patt_char then (
-            if is_checking_last_patt_char then (
-                split_helper (current_str::current_list) "" "" pattern_list 0 s_list'
-            ) else (
-                split_helper current_list current_str (current_matched_str ^ (Char.escaped c)) pattern_list (index + 1) s_list'
-            )
-        ) else (
-            split_helper current_list (current_str ^ (current_matched_str ^ (Char.escaped c))) "" pattern_list 0 s_list'
-        )
+        if List.hd current_list = Some "" then begin
+            List.rev ((implode s_list) :: ((current_str ^ current_matched_str) :: current_list))
+        end else begin
+            if c = current_patt_char then begin
+                if is_checking_last_patt_char then begin
+                    split_helper (current_str::current_list) "" "" pattern_list 0 s_list'
+                end else begin
+                    split_helper current_list current_str (current_matched_str ^ (Char.escaped c)) pattern_list (index + 1) s_list'
+                end
+            end else begin
+                split_helper current_list (current_str ^ (current_matched_str ^ (Char.escaped c))) "" pattern_list 0 s_list'
+            end
+        end
 
 
 let split_on_string s pattern =
@@ -122,13 +122,33 @@ let rec convert_header_strings_to_records init strings =
     | [] -> List.rev init
     | s::strings' -> convert_header_strings_to_records ((get_http_request_header s)::init) strings'
 
-let get_http_header_entries request_stings =
-    let header_and_body_strings_option = List.tl request_stings in
+let get_http_header_entries request_strings =
+    let header_and_body_strings_option = List.tl request_strings in
     match header_and_body_strings_option with
     | Some header_and_body_strings ->
         get_http_header_entries_util [] header_and_body_strings
         |> convert_header_strings_to_records []
     | None -> []
+
+let get_http_request_body request_strings =
+    match request_strings with
+    | ""::s -> List.hd s
+    | _ -> None
+
+type http_request =
+    {
+        request_line: http_request_line;
+        headers: http_request_header list;
+        body: string option;
+    }
+
+let get_http_request request_string =
+    let splitted_request_strings = split_on_string request_string "\r\n" in
+    {
+        request_line = get_http_request_line splitted_request_strings;
+        headers      = get_http_header_entries splitted_request_strings;
+        body         = get_http_request_body splitted_request_strings;
+    }
 
 let () =
     let request = get_http_request_line (split_on_string test_http_request "\r\n") in
