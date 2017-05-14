@@ -47,7 +47,7 @@ let split_on_string s pattern =
     split_helper [] "" "" patter_char_list 0 s_char_list
 
 type http_method_t =
-    | GET | HEAD | POST
+    | GET | HEAD | POST | PUT | DELETE | TRACE | CONNECT | OPTIONS
 
 type http_request_line =
     {
@@ -63,6 +63,11 @@ let get_http_method_from_string s =
     | "GET" -> Some GET
     | "HEAD" -> Some HEAD
     | "POST" -> Some POST
+    | "PUT" -> Some PUT
+    | "DELETE" -> Some DELETE
+    | "TRACE" -> Some TRACE
+    | "CONNECT" -> Some CONNECT
+    | "OPTIONS" -> Some OPTIONS
     | _ -> raise (Invalid_http_request_method "Can't be recognized")
 
 let get_method_string_from_http_method m =
@@ -70,6 +75,11 @@ let get_method_string_from_http_method m =
     | GET -> "GET"
     | HEAD -> "HEAD"
     | POST -> "POST"
+    | PUT -> "PUT"
+    | DELETE -> "DELETE"
+    | TRACE -> "TRACE"
+    | CONNECT -> "CONNECT"
+    | OPTIONS -> "OPTIONS"
 
 let split_http_request_line s =
     let splitted_request_line = String.split ~on:' ' s in
@@ -87,7 +97,7 @@ let get_http_request_header header_line =
     let splitted_header_line = String.split header_line ~on:':' in
     let header_option = List.hd splitted_header_line in
     let value_option = List.hd (List.rev splitted_header_line) in
-    match value_option, header_option with
+    match header_option, value_option with
     | None, _ -> raise (Invalid_http_request_header "No header attached")
     | _, None -> raise (Invalid_http_request_header "No value attached")
     | Some h, Some v ->
@@ -104,7 +114,11 @@ let get_http_request_line l =
         | None -> raise (Invalid_http_request_method "Can't be recognized")
     in
     let request_uri = List.nth_exn request_line_tokens 1 in
-    let request_version = List.nth_exn request_line_tokens 2 in
+    let request_version =
+        match List.nth request_line_tokens 2 with
+        | Some token -> token
+        | None -> ""
+    in
     {
         http_method      = request_method;
         http_request_uri = request_uri;
@@ -150,9 +164,24 @@ let get_http_request request_string =
         body         = get_http_request_body splitted_request_strings;
     }
 
+let print_request request =
+    let { request_line = r; headers = h; body = b; } = request in
+    let { http_method = r_m; http_request_uri = r_u; http_version = r_v; } = r in
+    printf "%s %s %s\n" (get_method_string_from_http_method r_m) r_u r_v;
+    List.iter ~f:(fun { header; value } -> printf "%s: %s\n" header value) h;
+    match b with
+    | Some b_s -> printf "%s" b_s
+    | None -> ()
+
+let () =
+    [ test_http_request; simple_http_request ]
+    |> List.iter ~f:(fun request -> print_request (get_http_request request))
+
+(**
 let () =
     let request = get_http_request_line (split_on_string test_http_request "\r\n") in
     printf "method = %s, uri = %s, version = %s\n" (get_method_string_from_http_method request.http_method) request.http_request_uri request.http_version
+**)
 
 (**
 let () =
