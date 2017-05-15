@@ -64,4 +64,47 @@ type http_status_line =
         reason_phrase: string;
     }
 
+type http_response_header =
+    {
+        header: string;
+        value: string;
+    }
 
+type http_response =
+    {
+        status_line: http_status_line;
+        headers: http_response_header list;
+        body: string option;
+    }
+
+let http_version_string = "HTTP/1.1"
+
+let get_http_response_string response =
+    let { status_line = s; headers = h; body = b; } = response in
+    let { http_version = s_v; status_code = s_c; reason_phrase = s_r; } = s in
+    let status_line_string = (String.concat [s_v;(string_of_int (status_code_to_int s_c));s_r;"\r\n"] ~sep:" ") in
+    let headers_string = (String.concat (List.map ~f:(fun { header; value } -> Printf.sprintf "%s: %s\r\n" header value) h) ~sep:"") in
+    let status_headers_line = String.concat [status_line_string;headers_string] ~sep:"" in
+    match b with
+    | Some b_s -> String.concat [status_headers_line;b_s] ~sep:""
+    | None -> status_headers_line
+
+
+let test_response =
+    {
+        status_line = {
+            http_version = http_version_string;
+            status_code = Ok;
+            reason_phrase = "OK";
+        };
+        headers = [
+            {
+                header = "Server";
+                value = "ocaml-http";
+            };
+        ];
+        body = None;
+    }
+
+let () =
+    printf "%s\n" (get_http_response_string test_response)
